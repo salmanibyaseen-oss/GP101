@@ -1,0 +1,44 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "gp101-app",
+  "main": ".open-next/worker.js",
+  // غيّرها لتاريخ اليوم وقت الرفع (لازم يكون 2024-09-23 أو بعده)
+  "compatibility_date": "2026-07-08",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // ملفات الموقع الثابتة (CSS/JS/الصور) اللي بيولّدها opennextjs-cloudflare build
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+
+  // Hyperdrive: بيسمح لـ Worker يتصل بقاعدة بيانات PostgreSQL عادية (Supabase/Neon/...)
+  // ده لازم تعمله بنفسك من الداشبورد أو بالأمر:
+  //   npx wrangler hyperdrive create gp101-db --connection-string="postgresql://USER:PASS@HOST:5432/DB"
+  // وبعدها حط الـ id اللي هيرجعلك مكان YOUR_HYPERDRIVE_ID
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "YOUR_HYPERDRIVE_ID"
+    }
+  ],
+
+  // KV namespace لتخزين كاش الـ ISR (next build cache)
+  // أنشئه بالأمر: npx wrangler kv namespace create NEXT_CACHE_WORKERS_KV
+  "kv_namespaces": [
+    {
+      "binding": "NEXT_CACHE_WORKERS_KV",
+      "id": "YOUR_KV_NAMESPACE_ID"
+    }
+  ],
+
+  // متغيرات غير حسّاسة (public). أي سر (JWT_SECRET, DATABASE_URL..) لازم يتضاف بـ:
+  //   npx wrangler secret put JWT_SECRET
+  "vars": {
+    "NEXT_PUBLIC_MAX_DEVICES": "2"
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}
