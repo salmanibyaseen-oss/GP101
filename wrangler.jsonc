@@ -27,7 +27,7 @@
   // أنشئه بالأمر: npx wrangler kv namespace create NEXT_CACHE_WORKERS_KV
   "kv_namespaces": [
     {
-      "binding": "NEXT_CACHE_WORKERS_KV",
+      "binding": "NEXT_INC_CACHE_KV",
       "id": "9b1a3f345a2e47e7931f74e7df8ba271"
     }
   ],
