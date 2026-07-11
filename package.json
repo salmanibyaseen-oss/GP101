@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build:next": "prisma generate && next build",
-    "build": "npm run build:next && opennextjs-cloudflare build",
+    "build": "npm run build:next && opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion",
     "start": "next start",
     "postinstall": "prisma generate",
     "preview": "npm run build && opennextjs-cloudflare preview",
