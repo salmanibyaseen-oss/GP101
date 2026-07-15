@@ -7,6 +7,16 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ["@prisma/client", "bcryptjs"],
   },
+  // إعداد احتياطي عشان Webpack (اللي بيستخدمه Next.js) يقدر يتعامل مع أي ملف
+  // .wasm ممكن الـ Prisma client الجديد يستورده (query compiler)
+  webpack: (config) => {
+    config.experiments = {
+      ...config.experiments,
+      asyncWebAssembly: true,
+      layers: true,
+    };
+    return config;
+  },
   headers: async () => [
     {
       source: "/sw.js",
