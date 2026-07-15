@@ -6,6 +6,10 @@ generator client {
   // وده بيتسبب في: EvalError: Code generation from strings disallowed for this context
   provider = "prisma-client"
   output   = "../src/generated/prisma"
+  // "runtime = cloudflare" ده اللي بيخلي Prisma يجهّز ملف الـ WASM كـ import ثابت
+  // وقت البناء (مسموح على Workers) بدل ما يحاول يجمّعه وقت التشغيل فعليًا
+  // (اللي بيدي الخطأ: CompileError: Wasm code generation disallowed by embedder)
+  runtime  = "cloudflare"
 }
 datasource db {
   provider = "postgresql"
