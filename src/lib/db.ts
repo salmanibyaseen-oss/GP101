@@ -1,5 +1,5 @@
 // src/lib/db.ts
-import { PrismaClient } from "../generated/prisma";
+import { PrismaClient } from "../generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
