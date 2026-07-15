@@ -1,7 +1,6 @@
 // src/lib/db.ts
 import { PrismaClient } from "../generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
@@ -22,8 +21,10 @@ function createPrismaClient(): PrismaClient {
     // مش شغالين جوه Cloudflare (مثلاً وقت الـ build أو dev عادي) - تجاهل
   }
 
-  const pool = new Pool({ connectionString });
-  const adapter = new PrismaPg(pool);
+  // مهم: PrismaPg بتاخد كائن { connectionString } وبتعمل الـ Pool بنفسها من جوّه.
+  // تمرير Pool جاهزة مباشرة كان بيخلي الـ adapter ميتعرفش عليه صح جوه Prisma
+  // فيرجع يحاول يستخدم الـ Query Engine الأصلي (اللي بيفشل على Workers).
+  const adapter = new PrismaPg({ connectionString });
 
   return new PrismaClient({
     adapter,
