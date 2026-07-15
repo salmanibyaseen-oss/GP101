@@ -1,13 +1,10 @@
 // prisma/schema.prisma
 generator client {
-  // مثبتين على Prisma 6.19.0 (مش أحدث إصدار) لأن Prisma 7.x فيه Bug مؤكد
-  // من فريق Prisma نفسه بيكسر أي مشروع Next.js على Cloudflare Workers:
-  // https://github.com/prisma/prisma/issues/28657
-  // "queryCompiler" + "driverAdapters" هما الفلاجز الصح للنسخة دي (بدل runtime="cloudflare"
-  // اللي متاحة بس من 7.2 ومش متوافقة مع خط بناء Next.js/Webpack أصلاً).
-  provider        = "prisma-client-js"
-  previewFeatures = ["queryCompiler", "driverAdapters"]
-  output          = "../src/generated/prisma"
+  // التركيبة دي بالظبط (provider="prisma-client" + Prisma 6.19.0 + من غير أي previewFeatures)
+  // هي اللي أكدها فريق Prisma نفسه إنها شغالة على Cloudflare Workers، قبل الـ Bug اللي
+  // ظهر في 7.0.0: https://github.com/prisma/prisma/issues/28657
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 datasource db {
   provider  = "postgresql"
