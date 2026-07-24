@@ -4,24 +4,30 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 async function createPrismaClient(): Promise<PrismaClient> {
-  // على Cloudflare Workers لازم نمر من Hyperdrive (مفيش TCP مباشر لقاعدة البيانات).
-  // محليًا (next dev / npm run build) مفيش Hyperdrive context، فبنستخدم DATABASE_URL العادي.
   let connectionString = process.env.DATABASE_URL as string;
+  let debugInfo = "init";
 
   try {
-    // مهم: { async: true } هنا إجباري. النسخة المتزامنة العادية من
-    // getCloudflareContext() بتشتغل بس لو اتنادت قبل أي await في نفس الطلب.
-    // كود تسجيل الدخول بيعمل await request.json() قبل ما يستخدم Prisma، فلو
-    // استخدمنا النسخة المتزامنة هنا هتفشل بصمت وترجع لـ DATABASE_URL (مش موصول
-    // فعليًا على Workers) بدل Hyperdrive - وده كان سبب الخطأ الغامض اللي حصل.
+    debugInfo = "before getCloudflareContext";
     const { env } = await getCloudflareContext({ async: true });
+    debugInfo = "after getCloudflareContext, env keys: " + Object.keys(env || {}).join(",");
     // @ts-expect-error - HYPERDRIVE binding معرّف في wrangler.jsonc
     if (env?.HYPERDRIVE?.connectionString) {
       // @ts-expect-error
       connectionString = env.HYPERDRIVE.connectionString;
+      debugInfo = "got hyperdrive connectionString, length=" + connectionString.length;
+    } else {
+      debugInfo = "no HYPERDRIVE binding found on env, falling back to DATABASE_URL (len=" + (connectionString?.length || 0) + ")";
     }
-  } catch {
-    // مش شغالين جوه Cloudflare (مثلاً وقت الـ build أو dev عادي) - تجاهل
+  } catch (e) {
+    // مؤقتًا: بنطبع الخطأ الحقيقي بدل ما نبلعه، عشان نشخّص المشكلة بدقة
+    console.error("[DEBUG] getCloudflareContext failed:", debugInfo, "| error:", e instanceof Error ? e.message : String(e));
+  }
+
+  console.log("[DEBUG] createPrismaClient final state:", debugInfo, "| connectionString present:", !!connectionString, "| length:", connectionString?.length || 0);
+
+  if (!connectionString) {
+    throw new Error("[DEBUG] connectionString is empty/undefined - cannot create Prisma client. debugInfo=" + debugInfo);
   }
 
   const adapter = new PrismaPg({ connectionString });
@@ -32,9 +38,6 @@ async function createPrismaClient(): Promise<PrismaClient> {
   });
 }
 
-// نفس فكرة الـ singleton الكسول لكن دلوقتي async بالكامل، وبنأجل حتى استخدامه
-// لحد آخر لحظة ممكنة (وقت نداء الميثود الفعلي زي findUnique/create) عشان نضمن
-// إننا جوه الـ request context الصح مهما كان عدد الـ awaits قبلها.
 let clientPromise: Promise<PrismaClient> | null = null;
 
 function getClientPromise(): Promise<PrismaClient> {
@@ -59,9 +62,6 @@ function callModelMethod(model: string, method: string) {
   };
 }
 
-// prisma.user.findUnique(...) وأمثالها بتشتغل زي ما هي بالظبط من غير أي تعديل
-// في باقي الملفات (كل النداءات أصلاً بتستخدم await، فرجوع Promise هنا طبيعي
-// ومتوافق 100% مع الكود الموجود).
 export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
   get(_target, prop) {
     if (typeof prop !== "string") return undefined;
