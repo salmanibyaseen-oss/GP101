@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "gp101-app",
+  "name": "gp101",
   "main": ".open-next/worker.js",
   // غيّرها لتاريخ اليوم وقت الرفع (لازم يكون 2024-09-23 أو بعده)
   "compatibility_date": "2026-07-08",
