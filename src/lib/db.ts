@@ -3,15 +3,18 @@ import { PrismaClient } from "../generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
-
-function createPrismaClient(): PrismaClient {
+async function createPrismaClient(): Promise<PrismaClient> {
   // على Cloudflare Workers لازم نمر من Hyperdrive (مفيش TCP مباشر لقاعدة البيانات).
   // محليًا (next dev / npm run build) مفيش Hyperdrive context، فبنستخدم DATABASE_URL العادي.
   let connectionString = process.env.DATABASE_URL as string;
 
   try {
-    const { env } = getCloudflareContext();
+    // مهم: { async: true } هنا إجباري. النسخة المتزامنة العادية من
+    // getCloudflareContext() بتشتغل بس لو اتنادت قبل أي await في نفس الطلب.
+    // كود تسجيل الدخول بيعمل await request.json() قبل ما يستخدم Prisma، فلو
+    // استخدمنا النسخة المتزامنة هنا هتفشل بصمت وترجع لـ DATABASE_URL (مش موصول
+    // فعليًا على Workers) بدل Hyperdrive - وده كان سبب الخطأ الغامض اللي حصل.
+    const { env } = await getCloudflareContext({ async: true });
     // @ts-expect-error - HYPERDRIVE binding معرّف في wrangler.jsonc
     if (env?.HYPERDRIVE?.connectionString) {
       // @ts-expect-error
@@ -21,9 +24,6 @@ function createPrismaClient(): PrismaClient {
     // مش شغالين جوه Cloudflare (مثلاً وقت الـ build أو dev عادي) - تجاهل
   }
 
-  // مهم: PrismaPg بتاخد كائن { connectionString } وبتعمل الـ Pool بنفسها من جوّه.
-  // تمرير Pool جاهزة مباشرة كان بيخلي الـ adapter ميتعرفش عليه صح جوه Prisma
-  // فيرجع يحاول يستخدم الـ Query Engine الأصلي (اللي بيفشل على Workers).
   const adapter = new PrismaPg({ connectionString });
 
   return new PrismaClient({
@@ -32,8 +32,48 @@ function createPrismaClient(): PrismaClient {
   });
 }
 
-// ملحوظة: على Workers كل Request بياخد instance جديد (مفيش long-lived global process
-// زي Node)، فالـ cache دي بتفيد بس وقت next dev/الأنواع التانية من الاستضافة.
-export const prisma = globalForPrisma.prisma || createPrismaClient();
+// نفس فكرة الـ singleton الكسول لكن دلوقتي async بالكامل، وبنأجل حتى استخدامه
+// لحد آخر لحظة ممكنة (وقت نداء الميثود الفعلي زي findUnique/create) عشان نضمن
+// إننا جوه الـ request context الصح مهما كان عدد الـ awaits قبلها.
+let clientPromise: Promise<PrismaClient> | null = null;
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+function getClientPromise(): Promise<PrismaClient> {
+  if (!clientPromise) clientPromise = createPrismaClient();
+  return clientPromise;
+}
+
+function callTopLevel(prop: string) {
+  return async (...args: unknown[]) => {
+    const client = await getClientPromise();
+    const fn = (client as unknown as Record<string, (...a: unknown[]) => unknown>)[prop];
+    return fn.apply(client, args);
+  };
+}
+
+function callModelMethod(model: string, method: string) {
+  return async (...args: unknown[]) => {
+    const client = await getClientPromise();
+    const modelObj = (client as unknown as Record<string, Record<string, (...a: unknown[]) => unknown>>)[model];
+    const fn = modelObj[method];
+    return fn.apply(modelObj, args);
+  };
+}
+
+// prisma.user.findUnique(...) وأمثالها بتشتغل زي ما هي بالظبط من غير أي تعديل
+// في باقي الملفات (كل النداءات أصلاً بتستخدم await، فرجوع Promise هنا طبيعي
+// ومتوافق 100% مع الكود الموجود).
+export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    if (typeof prop !== "string") return undefined;
+    if (prop.startsWith("$")) return callTopLevel(prop);
+    return new Proxy(
+      {},
+      {
+        get(_t, method) {
+          if (typeof method !== "string") return undefined;
+          return callModelMethod(prop, method);
+        },
+      }
+    );
+  },
+});
